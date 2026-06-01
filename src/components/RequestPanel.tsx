@@ -6,16 +6,25 @@
 import React, { useState, useEffect } from 'react';
 import { HttpMethod, RequestConfig, KeyValuePair, BodyType, AuthType, AuthSettings } from '../types';
 import { SCRIPT_TEMPLATES } from '../utils/scriptRunner';
-import { Plus, Trash2, Code2, Shield, Settings2, FileCode, Beaker, HelpCircle } from 'lucide-react';
+import { Plus, Trash2, Code2, Shield, Settings2, FileCode, Beaker, HelpCircle, ChevronDown, ChevronUp, Sliders } from 'lucide-react';
 
 interface RequestPanelProps {
   config: RequestConfig;
   onChangeConfig: (newConfig: RequestConfig) => void;
   onSend: () => void;
   isLoading: boolean;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
-export default function RequestPanel({ config, onChangeConfig, onSend, isLoading }: RequestPanelProps) {
+export default function RequestPanel({ 
+  config, 
+  onChangeConfig, 
+  onSend, 
+  isLoading,
+  isCollapsed = false,
+  onToggleCollapse
+}: RequestPanelProps) {
   const [activeTab, setActiveTab] = useState<'params' | 'auth' | 'headers' | 'body' | 'scripts'>('params');
 
   // Synchronize URL string and Query Params Table
@@ -156,8 +165,47 @@ export default function RequestPanel({ config, onChangeConfig, onSend, isLoading
   const httpMethods: HttpMethod[] = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'];
 
   return (
-    <div id="request_panel_container" className="bg-slate-900 rounded-xl border border-slate-800 p-5 shadow-lg flex flex-col gap-4">
-      {/* Target Address bar */}
+    <div 
+      id="request_panel_container" 
+      className={`bg-slate-900 rounded-xl border border-slate-800 shadow-lg flex flex-col transition-all duration-150 ${
+        isCollapsed ? 'p-3 gap-2' : 'p-5 gap-4'
+      }`}
+    >
+      {/* Collapsible Panel Header Bar */}
+      <div className="flex items-center justify-between border-b border-slate-800/60 pb-2 select-none">
+        <div className="flex items-center gap-2 overflow-hidden mr-2">
+          <Sliders className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
+          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">Request Composer</span>
+          {isCollapsed && (
+            <span className="text-xs font-mono font-semibold text-slate-500 bg-slate-950 px-2.5 py-0.5 rounded border border-slate-850 truncate max-w-sm sm:max-w-md md:max-w-lg lg:max-w-xl">
+              <b className={config.method === 'GET' ? 'text-teal-400' : 'text-indigo-400'}>{config.method}</b> — {config.url || 'No Target URL Specified'}
+            </span>
+          )}
+        </div>
+        {onToggleCollapse && (
+          <button 
+            type="button"
+            onClick={onToggleCollapse}
+            className="text-slate-400 hover:text-indigo-400 px-2 py-1 rounded hover:bg-slate-800 transition cursor-pointer flex items-center gap-1.5 flex-shrink-0"
+          >
+            {isCollapsed ? (
+              <>
+                <ChevronDown className="w-3.5 h-3.5" />
+                <span className="text-[10px] font-bold uppercase tracking-wide">Expand Config</span>
+              </>
+            ) : (
+              <>
+                <ChevronUp className="w-3.5 h-3.5" />
+                <span className="text-[10px] font-bold uppercase tracking-wide">Collapse</span>
+              </>
+            )}
+          </button>
+        )}
+      </div>
+
+      {!isCollapsed && (
+        <>
+          {/* Target Address bar */}
       <div className="flex flex-col sm:flex-row items-stretch gap-2">
         {/* Method Picker */}
         <select
@@ -736,6 +784,8 @@ export default function RequestPanel({ config, onChangeConfig, onSend, isLoading
           </div>
         )}
       </div>
+        </>
+      )}
     </div>
   );
 }

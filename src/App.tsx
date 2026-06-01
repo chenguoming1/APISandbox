@@ -22,7 +22,8 @@ import {
   Terminal,
   Save,
   Moon,
-  ChevronRight
+  ChevronRight,
+  ChevronLeft
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -163,6 +164,11 @@ export default function App() {
   const [collections, setCollections] = useState<SavedCollection[]>([]);
   // Active selected view: 'dashboard' or 'diff'
   const [activeWorkspaceMode, setActiveWorkspaceMode] = useState<'dashboard' | 'diff'>('dashboard');
+
+  // Collapsible subpanels state
+  const [isRequestCollapsed, setIsRequestCollapsed] = useState(false);
+  const [isResponseCollapsed, setIsResponseCollapsed] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   // Modals Toggles State
   const [isEnvManagerOpen, setIsEnvManagerOpen] = useState(false);
@@ -558,49 +564,131 @@ export default function App() {
       <div className="flex-1 flex overflow-hidden min-h-0">
         
         {/* Left Side Catalog Sidebar Navigation */}
-        <aside className={`w-80 border-r ${selectedTheme.borderClass} ${selectedTheme.bgSidebar} flex flex-col justify-between flex-shrink-0 min-h-0 select-none`}>
-          <div className="flex-1 flex flex-col overflow-hidden min-h-0">
-            {/* Nav Headers switch */}
-            <div className="p-3 border-b border-slate-800/80 bg-slate-950/40 flex items-center justify-between">
-              <div className="flex bg-slate-950 p-1 rounded-lg border border-slate-850">
-                <button
-                  id="tab-btn-history"
-                  onClick={() => setSidebarTab('history')}
-                  className={`flex items-center gap-1.5 py-1 px-3.5 rounded-md text-xs font-bold transition cursor-pointer ${
-                    sidebarTab === 'history' ? 'bg-slate-850 text-indigo-400' : 'text-slate-500 hover:text-slate-350'
-                  }`}
-                >
-                  <History className="w-3.5 h-3.5" /> History
-                </button>
-                <button
-                  id="tab-btn-collections"
-                  onClick={() => setSidebarTab('collections')}
-                  className={`flex items-center gap-1.5 py-1 px-3.5 rounded-md text-xs font-bold transition cursor-pointer ${
-                    sidebarTab === 'collections' ? 'bg-slate-850 text-indigo-400' : 'text-slate-500 hover:text-slate-350'
-                  }`}
-                >
-                  <FolderHeart className="w-3.5 h-3.5" /> Collections
-                </button>
-              </div>
-
-              {/* Response differences toggle */}
+        <aside className={`transition-all duration-200 ${isSidebarCollapsed ? 'w-14' : 'w-80'} border-r ${selectedTheme.borderClass} ${selectedTheme.bgSidebar} flex flex-col justify-between flex-shrink-0 min-h-0 select-none overflow-hidden relative`}>
+          {isSidebarCollapsed ? (
+            <div className="flex-1 flex flex-col items-center py-4 gap-6 animate-fadeIn">
+              {/* Expand Toggle Trigger button */}
               <button
-                id="toggle-diff-ws-btn"
-                onClick={() => {
-                  setActiveWorkspaceMode(prev => prev === 'dashboard' ? 'diff' : 'dashboard');
-                }}
-                className={`py-1 px-2 rounded-lg text-[11px] font-bold border transition duration-150 cursor-pointer ${
-                  activeWorkspaceMode === 'diff' 
-                    ? 'bg-indigo-600 border-indigo-400 text-white' 
-                    : 'border-slate-800 text-slate-400 hover:border-slate-700'
-                }`}
+                id="expand-sidebar-btn"
+                onClick={() => setIsSidebarCollapsed(false)}
+                className="p-2 text-slate-450 hover:text-indigo-400 hover:bg-slate-800/55 rounded-lg transition-all cursor-pointer"
+                title="Expand Catalog Sidebar"
               >
-                Diff Arena
+                <ChevronRight className="w-5 h-5" />
+              </button>
+
+              <div className="w-8 border-b border-slate-808" />
+
+              {/* Mini Interactive Icons to toggle with expand */}
+              <button
+                onClick={() => {
+                  setSidebarTab('history');
+                  setIsSidebarCollapsed(false);
+                }}
+                className={`p-2.5 rounded-xl transition cursor-pointer relative group ${
+                  sidebarTab === 'history' ? 'bg-slate-800 text-indigo-400 border border-slate-750' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-900/50'
+                }`}
+                title="Request Run History"
+              >
+                <History className="w-5 h-5" />
+                {history.length > 0 && (
+                  <span className="absolute -top-1 -right-2 bg-indigo-600 border border-slate-950 text-white font-mono text-[9px] font-bold px-1.5 py-0.2 rounded-full min-w-4 text-center">
+                    {history.length}
+                  </span>
+                )}
+                <div className="absolute left-16 top-1/2 -translate-y-1/2 bg-slate-900 border border-slate-800 text-slate-200 text-[10px] font-bold px-2 py-1 rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-20">
+                  History Catalog ({history.length})
+                </div>
+              </button>
+
+              <button
+                onClick={() => {
+                  setSidebarTab('collections');
+                  setIsSidebarCollapsed(false);
+                }}
+                className={`p-2.5 rounded-xl transition cursor-pointer relative group ${
+                  sidebarTab === 'collections' ? 'bg-slate-800 text-indigo-400 border border-slate-750' : 'text-slate-500 hover:text-slate-330 hover:bg-slate-900/50'
+                }`}
+                title="Saves & Collections"
+              >
+                <FolderHeart className="w-5 h-5" />
+                <div className="absolute left-16 top-1/2 -translate-y-1/2 bg-slate-900 border border-slate-800 text-slate-200 text-[10px] font-bold px-2 py-1 rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-20">
+                  Saved Collections
+                </div>
+              </button>
+
+              <button
+                onClick={() => {
+                  setIsSidebarCollapsed(false);
+                  setActiveWorkspaceMode(activeWorkspaceMode === 'dashboard' ? 'diff' : 'dashboard');
+                }}
+                className={`p-2.5 rounded-xl transition cursor-pointer relative group ${
+                  activeWorkspaceMode === 'diff' ? 'bg-indigo-650 text-white border border-indigo-400/30' : 'text-slate-500 hover:text-slate-330 hover:bg-slate-900/50'
+                }`}
+                title="Response Comparative Arena"
+              >
+                <Columns className="w-5 h-5" />
+                <div className="absolute left-16 top-1/2 -translate-y-1/2 bg-slate-900 border border-slate-800 text-slate-200 text-[10px] font-bold px-2 py-1 rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-20">
+                  {activeWorkspaceMode === 'diff' ? 'Show Workspace' : 'Diff Arena'}
+                </div>
               </button>
             </div>
+          ) : (
+            <>
+              <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+                {/* Nav Headers switch */}
+                <div className="p-3 border-b border-slate-800/80 bg-slate-950/40 flex items-center justify-between gap-1.5 flex-wrap">
+                  <div className="flex bg-slate-950 p-1 rounded-lg border border-slate-850">
+                    <button
+                      id="tab-btn-history"
+                      onClick={() => setSidebarTab('history')}
+                      className={`flex items-center gap-1.5 py-1 px-3 rounded-md text-xs font-bold transition cursor-pointer ${
+                        sidebarTab === 'history' ? 'bg-slate-850 text-indigo-400' : 'text-slate-500 hover:text-slate-350'
+                      }`}
+                    >
+                      <History className="w-3.5 h-3.5" /> History
+                    </button>
+                    <button
+                      id="tab-btn-collections"
+                      onClick={() => setSidebarTab('collections')}
+                      className={`flex items-center gap-1.5 py-1 px-3 rounded-md text-xs font-bold transition cursor-pointer ${
+                        sidebarTab === 'collections' ? 'bg-slate-850 text-indigo-400' : 'text-slate-500 hover:text-slate-350'
+                      }`}
+                    >
+                      <FolderHeart className="w-3.5 h-3.5" /> Collections
+                    </button>
+                  </div>
 
-            {/* List Catalog displays scrollable */}
-            <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    {/* Response differences toggle */}
+                    <button
+                      id="toggle-diff-ws-btn"
+                      onClick={() => {
+                        setActiveWorkspaceMode(prev => prev === 'dashboard' ? 'diff' : 'dashboard');
+                      }}
+                      className={`py-1 px-2.5 rounded-lg text-[11px] font-bold border transition duration-150 cursor-pointer ${
+                        activeWorkspaceMode === 'diff' 
+                          ? 'bg-indigo-600 border-indigo-400 text-white' 
+                          : 'border-slate-800 text-slate-400 hover:border-slate-700'
+                      }`}
+                    >
+                      Diff
+                    </button>
+
+                    {/* Collapse Button */}
+                    <button
+                      id="collapse-sidebar-btn"
+                      title="Collapse Sidebar"
+                      onClick={() => setIsSidebarCollapsed(true)}
+                      className="p-1 px-1.5 border border-slate-800/80 hover:border-slate-700 text-slate-400 hover:text-indigo-400 rounded-lg bg-slate-950 transition cursor-pointer"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* List Catalog displays scrollable */}
+                <div className="flex-1 overflow-y-auto p-3 space-y-2">
               
               {/* HISTORY DISCOVERY LIST */}
               {sidebarTab === 'history' && (
@@ -742,36 +830,38 @@ export default function App() {
             </div>
           </div>
 
-          {/* Collated Quick Variables Info status */}
-          {activeWorkspaceMode === 'dashboard' && (
-            <div className="p-4 bg-slate-950/40 border-t border-slate-800">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Active Variables scope</span>
-                <button
-                  onClick={() => setIsEnvManagerOpen(true)}
-                  className="text-[10px] text-indigo-450 hover:text-indigo-400 font-bold transition flex items-center gap-0.5 cursor-pointer"
-                >
-                  Edit variables
-                </button>
-              </div>
-
-              <div className="max-h-24 overflow-y-auto space-y-1">
-                {environments.find(e => e.id === activeEnvId)?.variables.filter(v => v.enabled).map(v => (
-                  <div key={v.id} className="flex justify-between font-mono text-[10.5px] border-b border-slate-900 pb-0.5" title={`${v.key}: ${v.value}`}>
-                    <span className="text-slate-400 font-semibold truncate w-1/2">{"{{"}{v.key}{"}}"}</span>
-                    <span className="text-slate-500 truncate w-1/2 text-right">{v.value}</span>
+              {/* Collated Quick Variables Info status */}
+              {activeWorkspaceMode === 'dashboard' && (
+                <div className="p-4 bg-slate-950/40 border-t border-slate-800">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Active Variables scope</span>
+                    <button
+                      onClick={() => setIsEnvManagerOpen(true)}
+                      className="text-[10px] text-indigo-450 hover:text-indigo-400 font-bold transition flex items-center gap-0.5 cursor-pointer"
+                    >
+                      Edit variables
+                    </button>
                   </div>
-                ))}
-                {(!activeEnvId || environments.find(e => e.id === activeEnvId)?.variables.filter(v => v.enabled).length === 0) && (
-                  <p className="text-[10px] text-slate-600 text-center italic py-2">No active variables loaded.</p>
-                )}
-              </div>
-            </div>
+
+                  <div className="max-h-24 overflow-y-auto space-y-1">
+                    {environments.find(e => e.id === activeEnvId)?.variables.filter(v => v.enabled).map(v => (
+                      <div key={v.id} className="flex justify-between font-mono text-[10.5px] border-b border-slate-900 pb-0.5" title={`${v.key}: ${v.value}`}>
+                        <span className="text-slate-400 font-semibold truncate w-1/2">{"{{"}{v.key}{"}}"}</span>
+                        <span className="text-slate-500 truncate w-1/2 text-right">{v.value}</span>
+                      </div>
+                    ))}
+                    {(!activeEnvId || environments.find(e => e.id === activeEnvId)?.variables.filter(v => v.enabled).length === 0) && (
+                      <p className="text-[10px] text-slate-600 text-center italic py-2">No active variables loaded.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </aside>
 
         {/* Central Primary Layout Panels */}
-        <main className="flex-1 flex flex-col p-4 overflow-y-auto min-h-0 min-w-0 bg-slate-950/20">
+        <main className="flex-1 flex flex-col p-4 overflow-hidden min-h-0 min-w-0 bg-slate-950/20">
           
           <AnimatePresence mode="wait">
             {activeWorkspaceMode === 'dashboard' ? (
@@ -821,12 +911,26 @@ export default function App() {
                   onChangeConfig={setConfig}
                   onSend={handleSendRequest}
                   isLoading={isLoading}
+                  isCollapsed={isRequestCollapsed}
+                  onToggleCollapse={() => {
+                    setIsRequestCollapsed(!isRequestCollapsed);
+                    if (isRequestCollapsed && isResponseCollapsed) {
+                      setIsResponseCollapsed(false);
+                    }
+                  }}
                 />
 
                 {/* Bottom Section responses outcomes */}
                 <ResponseViewer
                   response={response}
                   isLoading={isLoading}
+                  isCollapsed={isResponseCollapsed}
+                  onToggleCollapse={() => {
+                    setIsResponseCollapsed(!isResponseCollapsed);
+                    if (isResponseCollapsed && isRequestCollapsed) {
+                      setIsRequestCollapsed(false);
+                    }
+                  }}
                 />
               </motion.div>
             ) : (
