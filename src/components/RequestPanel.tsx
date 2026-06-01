@@ -15,6 +15,7 @@ interface RequestPanelProps {
   isLoading: boolean;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
+  isIntegrated?: boolean;
 }
 
 export default function RequestPanel({ 
@@ -23,7 +24,8 @@ export default function RequestPanel({
   onSend, 
   isLoading,
   isCollapsed = false,
-  onToggleCollapse
+  onToggleCollapse,
+  isIntegrated = false
 }: RequestPanelProps) {
   const [activeTab, setActiveTab] = useState<'params' | 'auth' | 'headers' | 'body' | 'scripts'>('params');
 
@@ -167,15 +169,16 @@ export default function RequestPanel({
   return (
     <div 
       id="request_panel_container" 
-      className={`bg-slate-900 rounded-xl border border-slate-800 shadow-lg flex flex-col transition-all duration-150 ${
-        isCollapsed ? 'p-3 gap-2' : 'p-5 gap-4'
-      }`}
+      className={isIntegrated 
+        ? `flex flex-col gap-4 ${isCollapsed ? 'p-2' : 'p-4'}`
+        : `bg-slate-900 rounded-xl border border-slate-800 shadow-lg flex flex-col transition-all duration-150 ${isCollapsed ? 'p-3 gap-2' : 'p-5 gap-4'}`
+      }
     >
       {/* Collapsible Panel Header Bar */}
       <div className="flex items-center justify-between border-b border-slate-800/60 pb-2 select-none">
         <div className="flex items-center gap-2 overflow-hidden mr-2">
           <Sliders className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
-          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">Request Composer</span>
+          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">Composer Settings</span>
           {isCollapsed && (
             <span className="text-xs font-mono font-semibold text-slate-500 bg-slate-950 px-2.5 py-0.5 rounded border border-slate-850 truncate max-w-sm sm:max-w-md md:max-w-lg lg:max-w-xl">
               <b className={config.method === 'GET' ? 'text-teal-400' : 'text-indigo-400'}>{config.method}</b> — {config.url || 'No Target URL Specified'}

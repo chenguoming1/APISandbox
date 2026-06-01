@@ -21,13 +21,16 @@ import {
   RefreshCw,
   Terminal,
   Save,
+  Edit2,
   Moon,
   ChevronRight,
-  ChevronLeft
+  ChevronLeft,
+  ChevronDown,
+  FolderPlus
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
-import { HttpMethod, RequestConfig, ResponseData, Environment, HistoryItem, SavedCollection, KeyValuePair } from './types';
+import { HttpMethod, RequestConfig, ResponseData, Environment, HistoryItem, SavedCollection, KeyValuePair, Tab } from './types';
 import { executeScript, resolveRequestConfigVariables } from './utils/scriptRunner';
 import RequestPanel from './components/RequestPanel';
 import ResponseViewer from './components/ResponseViewer';
@@ -153,9 +156,167 @@ export default function App() {
   const [theme, setTheme] = useState<string>('obsidian');
   const [environments, setEnvironments] = useState<Environment[]>(INITIAL_ENVIRONMENTS);
   const [activeEnvId, setActiveEnvId] = useState<string>('env-prod');
-  const [config, setConfig] = useState<RequestConfig>(DEFAULT_REQUEST_CONFIG);
-  const [response, setResponse] = useState<ResponseData | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+
+  // Dynamic Tabs State
+  const [tabs, setTabs] = useState<Tab[]>([
+    {
+      id: 'default-tab',
+      name: 'Untitled',
+      config: JSON.parse(JSON.stringify(DEFAULT_REQUEST_CONFIG)),
+      response: null,
+      isLoading: false,
+      isChanged: false
+    }
+  ]);
+  const [activeTabId, setActiveTabId] = useState<string>('default-tab');
+
+  // Request-editor-active states synchronized reactively with active tab
+  const [config, _setConfig] = useState<RequestConfig>(DEFAULT_REQUEST_CONFIG);
+  const [response, _setResponse] = useState<ResponseData | null>(null);
+  const [isLoading, _setIsLoading] = useState<boolean>(false);
+  const [requestName, _setRequestName] = useState('Untitled');
+
+  const setConfig = (newConfig: RequestConfig | ((prev: RequestConfig) => RequestConfig)) => {
+    _setConfig(prev => {
+      const resolved = typeof newConfig === 'function' ? newConfig(prev) : newConfig;
+      setTabs(prevTabs => prevTabs.map(t => {
+        if (t.id === activeTabId) {
+          return { ...t, config: resolved, isChanged: true };
+        }
+        return t;
+      }));
+      return resolved;
+    });
+  };
+
+  const setResponse = (newResponse: ResponseData | null | ((prev: ResponseData | null) => ResponseData | null)) => {
+    _setResponse(prev => {
+      const resolved = typeof newResponse === 'function' ? newResponse(prev) : newResponse;
+      setTabs(prevTabs => prevTabs.map(t => {
+        if (t.id === activeTabId) {
+          return { ...t, response: resolved };
+        }
+        return t;
+      }));
+      return resolved;
+    });
+  };
+
+  const setIsLoading = (newLoading: boolean | ((prev: boolean) => boolean)) => {
+    _setIsLoading(prev => {
+      const resolved = typeof newLoading === 'function' ? newLoading(prev) : newLoading;
+      setTabs(prevTabs => prevTabs.map(t => {
+        if (t.id === activeTabId) {
+          return { ...t, isLoading: resolved };
+        }
+        return t;
+      }));
+      return resolved;
+    });
+  };
+
+  const setRequestName = (newName: string | ((prev: string) => string)) => {
+    _setRequestName(prev => {
+      const resolved = typeof newName === 'function' ? newName(prev) : newName;
+      setTabs(prevTabs => prevTabs.map(t => {
+        if (t.id === activeTabId) {
+          return { ...t, name: resolved, isChanged: true };
+        }
+        return t;
+      }));
+      return resolved;
+    });
+  };
+
+  const handleSelectTab = (tabId: string) => {
+    const targetTab = tabs.find(t => t.id === tabId);
+    if (targetTab) {
+      setActiveTabId(tabId);
+      _setConfig(targetTab.config);
+      _setResponse(targetTab.response);
+      _setIsLoading(targetTab.isLoading);
+      _setRequestName(targetTab.name);
+    }
+  };
+
+  const handleCreateNewTab = () => {
+    const newTabId = Math.random().toString(36).substr(2, 9);
+    const newTab: Tab = {
+      id: newTabId,
+      name: 'Untitled',
+      config: JSON.parse(JSON.stringify(DEFAULT_REQUEST_CONFIG)),
+      response: null,
+      isLoading: false,
+      isChanged: false
+    };
+    setTabs(prev => [...prev, newTab]);
+    setActiveTabId(newTabId);
+    _setConfig(newTab.config);
+    _setResponse(null);
+    _setIsLoading(false);
+    _setRequestName('Untitled');
+  };
+
+  const handleCloseTab = (tabId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (tabs.length === 1) {
+      const resetTab: Tab = {
+        id: Math.random().toString(36).substr(2, 9),
+        name: 'Untitled',
+        config: JSON.parse(JSON.stringify(DEFAULT_REQUEST_CONFIG)),
+        response: null,
+        isLoading: false,
+        isChanged: false
+      };
+      setTabs([resetTab]);
+      setActiveTabId(resetTab.id);
+      _setConfig(resetTab.config);
+      _setResponse(null);
+      _setIsLoading(false);
+      _setRequestName('Untitled');
+      return;
+    }
+
+    const targetIndex = tabs.findIndex(t => t.id === tabId);
+    const nextTabs = tabs.filter(t => t.id !== tabId);
+    setTabs(nextTabs);
+
+    if (activeTabId === tabId) {
+      const nextActiveIndex = targetIndex === 0 ? 0 : targetIndex - 1;
+      const newActiveTab = nextTabs[nextActiveIndex];
+      setActiveTabId(newActiveTab.id);
+      _setConfig(newActiveTab.config);
+      _setResponse(newActiveTab.response);
+      _setIsLoading(newActiveTab.isLoading);
+      _setRequestName(newActiveTab.name);
+    }
+  };
+
+  const handleLoadQueryIntoTab = (associatedId: string, name: string, requestConfig: RequestConfig, existingResponse: ResponseData | null = null) => {
+    const existingTab = tabs.find(t => t.associatedRequestId === associatedId);
+    if (existingTab) {
+      handleSelectTab(existingTab.id);
+    } else {
+      const newTabId = Math.random().toString(36).substr(2, 9);
+      const newTab: Tab = {
+        id: newTabId,
+        name: name,
+        config: JSON.parse(JSON.stringify(requestConfig)),
+        response: existingResponse,
+        isLoading: false,
+        isChanged: false,
+        associatedRequestId: associatedId
+      };
+      setTabs(prev => [...prev, newTab]);
+      setActiveTabId(newTabId);
+      _setConfig(newTab.config);
+      _setResponse(newTab.response);
+      _setIsLoading(newTab.isLoading);
+      _setRequestName(newTab.name);
+    }
+    setActiveWorkspaceMode('dashboard');
+  };
+
   const [sidebarTab, setSidebarTab] = useState<'history' | 'collections'>('history');
   
   // History list
@@ -175,6 +336,10 @@ export default function App() {
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [collectionNameInput, setCollectionNameInput] = useState('');
   const [saveTargetName, setSaveTargetName] = useState('');
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [tempName, setTempName] = useState('Untitled');
+  const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
+  const [isSaveDropdownOpen, setIsSaveDropdownOpen] = useState(false);
 
   // Hydrate lists from localStorage on startup
   useEffect(() => {
@@ -414,9 +579,11 @@ export default function App() {
 
   // Retrieve item from history to load back into active input workspace
   const handleReuseHistoryRequest = (item: HistoryItem) => {
-    setConfig(item.config);
-    setResponse(item.response);
-    setActiveWorkspaceMode('dashboard');
+    const urlPath = item.config.url 
+      ? item.config.url.replace(/^(https?:\/\/)?(www\.)?/, '').substring(0, 30) 
+      : 'Query';
+    const label = item.label || `${item.config.method} — ${urlPath || 'item'}`;
+    handleLoadQueryIntoTab(item.id, label, item.config, item.response);
   };
 
   // Deleting catalog
@@ -446,8 +613,9 @@ export default function App() {
     localStorage.setItem('api_saved_collections', JSON.stringify(updated));
   };
 
-  const handleSaveActiveRequestToCollection = (colId: string) => {
-    if (!saveTargetName.trim()) return;
+  const handleSaveActiveRequestToCollection = (colId: string, customRequestName: string = '') => {
+    const finalName = customRequestName.trim() || requestName.trim() || 'Untitled';
+    const newReqId = Math.random().toString(36).substr(2, 9);
     const updated = collections.map(col => {
       if (col.id === colId) {
         return {
@@ -455,8 +623,8 @@ export default function App() {
           requests: [
             ...col.requests,
             {
-              id: Math.random().toString(36).substr(2, 9),
-              name: saveTargetName.trim(),
+              id: newReqId,
+              name: finalName,
               config: JSON.parse(JSON.stringify(config))
             }
           ]
@@ -465,9 +633,109 @@ export default function App() {
       return col;
     });
     setCollections(updated);
-    setSaveTargetName('');
+    _setRequestName(finalName);
+    
+    // Clear unsaved changes flag and bind active requestId reference
+    setTabs(prevTabs => prevTabs.map(t => {
+      if (t.id === activeTabId) {
+        return { ...t, name: finalName, associatedRequestId: newReqId, isChanged: false };
+      }
+      return t;
+    }));
+
     localStorage.setItem('api_saved_collections', JSON.stringify(updated));
-    alert('Request successfully saved to collection!');
+    setIsSaveModalOpen(false);
+  };
+
+  const handleSaveToNewCollection = (newColName: string, customRequestName: string = '') => {
+    if (!newColName.trim()) return;
+    const finalName = customRequestName.trim() || requestName.trim() || 'Untitled';
+    const newColId = Math.random().toString(36).substr(2, 9);
+    const newReqId = Math.random().toString(36).substr(2, 9);
+    
+    const newCol: SavedCollection = {
+      id: newColId,
+      name: newColName.trim(),
+      requests: [
+        {
+          id: newReqId,
+          name: finalName,
+          config: JSON.parse(JSON.stringify(config))
+        }
+      ]
+    };
+    
+    const updated = [...collections, newCol];
+    setCollections(updated);
+    _setRequestName(finalName);
+
+    // Clear unsaved changes flag and bind active requestId reference
+    setTabs(prevTabs => prevTabs.map(t => {
+      if (t.id === activeTabId) {
+        return { ...t, name: finalName, associatedRequestId: newReqId, isChanged: false };
+      }
+      return t;
+    }));
+
+    localStorage.setItem('api_saved_collections', JSON.stringify(updated));
+    setIsSaveModalOpen(false);
+  };
+
+  const handleDirectSaveActiveRequest = () => {
+    const activeTab = tabs.find(t => t.id === activeTabId);
+    if (!activeTab) return;
+
+    let foundCollectionId: string | null = null;
+    let foundRequestId: string | null = null;
+    
+    if (activeTab.associatedRequestId) {
+      for (const col of collections) {
+        const matchingReq = col.requests.find(r => r.id === activeTab.associatedRequestId);
+        if (matchingReq) {
+          foundCollectionId = col.id;
+          foundRequestId = matchingReq.id;
+          break;
+        }
+      }
+    }
+
+    if (foundCollectionId && foundRequestId) {
+      const finalName = requestName.trim() || 'Untitled';
+      const updated = collections.map(col => {
+        if (col.id === foundCollectionId) {
+          return {
+            ...col,
+            requests: col.requests.map(r => {
+              if (r.id === foundRequestId) {
+                return {
+                  ...r,
+                  name: finalName,
+                  config: JSON.parse(JSON.stringify(config))
+                };
+              }
+              return r;
+            })
+          };
+        }
+        return col;
+      });
+      setCollections(updated);
+      _setRequestName(finalName);
+      
+      // Update active tab changed properties
+      setTabs(prevTabs => prevTabs.map(t => {
+        if (t.id === activeTabId) {
+          return { ...t, name: finalName, isChanged: false };
+        }
+        return t;
+      }));
+      
+      localStorage.setItem('api_saved_collections', JSON.stringify(updated));
+    } else {
+      // Unassociated request -> act as Save As
+      setSaveTargetName(requestName);
+      setIsSaveModalOpen(true);
+    }
   };
 
   const handleRemoveCollection = (id: string, e: React.MouseEvent) => {
@@ -802,8 +1070,7 @@ export default function App() {
                             <div
                               key={req.id}
                               onClick={() => {
-                                setConfig(req.config);
-                                setActiveWorkspaceMode('dashboard');
+                                handleLoadQueryIntoTab(req.id, req.name, req.config, null);
                               }}
                               className="flex items-center justify-between p-1.5 rounded-lg text-[11px] font-medium hover:bg-slate-850/60 text-slate-350 cursor-pointer transition text-left"
                             >
@@ -863,6 +1130,61 @@ export default function App() {
         {/* Central Primary Layout Panels */}
         <main className="flex-1 flex flex-col p-4 overflow-hidden min-h-0 min-w-0 bg-slate-950/20">
           
+          {/* Dynamic Request Tabs Navigation bar */}
+          <div className="flex items-center justify-between border-b border-slate-800/40 pb-1.5 mb-2 flex-shrink-0 select-none gap-4">
+            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-thin max-w-full py-0.5 pr-2">
+              {tabs.map((tab) => {
+                const isActive = tab.id === activeTabId;
+                return (
+                  <div
+                    key={tab.id}
+                    onClick={() => handleSelectTab(tab.id)}
+                    className={`group flex items-center gap-2 pl-3 px-2 py-1.5 rounded-lg border text-xs font-semibold transition cursor-pointer select-none whitespace-nowrap ${
+                      isActive
+                        ? 'bg-slate-900 border-slate-750 text-indigo-400 shadow-sm'
+                        : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-900/40'
+                    }`}
+                  >
+                    <span className="truncate max-w-[120px]">
+                      {tab.name}
+                    </span>
+                    
+                    {tab.isChanged && (
+                      <span 
+                        className="text-amber-500 font-bold font-mono text-[14px] leading-none select-none pl-0.5" 
+                        title="Unsaved changes"
+                      >
+                        *
+                      </span>
+                    )}
+
+                    <button
+                      onClick={(e) => handleCloseTab(tab.id, e)}
+                      className="ml-1 p-0.5 rounded text-slate-500 hover:text-rose-400 hover:bg-slate-800 transition-all cursor-pointer opacity-50 group-hover:opacity-100"
+                      title="Close Tab"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                );
+              })}
+
+              {/* Add New Tab Button */}
+              <button
+                onClick={handleCreateNewTab}
+                className="p-1 px-1.5 bg-slate-900/40 hover:bg-slate-900 border border-slate-800 hover:border-slate-750 text-slate-450 hover:text-indigo-400 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 text-[11px] font-bold"
+                title="Open New Tab"
+              >
+                <Plus className="w-3.5 h-3.5" /> New Tab
+              </button>
+            </div>
+            
+            {/* Quick status count */}
+            <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-950/35 border border-slate-905 px-2 py-0.5 rounded hidden md:inline-block">
+              {tabs.length} {tabs.length === 1 ? 'tab' : 'tabs'}
+            </span>
+          </div>
+          
           <AnimatePresence mode="wait">
             {activeWorkspaceMode === 'dashboard' ? (
               <motion.div
@@ -871,67 +1193,139 @@ export default function App() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -5 }}
                 transition={{ duration: 0.15 }}
-                className="flex-1 flex flex-col gap-4 min-h-0"
+                className="flex-1 flex flex-col min-h-0"
               >
-                {/* Save target collection control bar if needed */}
-                <div className="flex items-center justify-between p-3 bg-slate-900 border border-slate-800 rounded-xl">
-                  <div className="flex items-center gap-2">
-                    <Bookmark className="w-4 h-4 text-amber-500" />
-                    <span className="text-xs text-slate-300 font-bold">Routinely saving queries? Bookmark to Collection</span>
+                {/* 3-in-1 Unified Dashboard Panel Container */}
+                <div className="flex-1 flex flex-col bg-slate-900 border border-slate-800 rounded-xl shadow-xl overflow-hidden min-h-0">
+                  {/* Unified Header with Request Name and Save Buttons */}
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between px-5 py-3 bg-slate-950/30 border-b border-slate-805 gap-3 flex-shrink-0 select-none">
+                    <div className="flex items-center gap-3 overflow-hidden">
+                      <span className="text-[10px] uppercase tracking-widest font-bold text-indigo-400 font-mono bg-indigo-950/40 border border-indigo-950 px-2 py-0.5 rounded flex-shrink-0">
+                        Active Request
+                      </span>
+                      
+                      {isEditingName ? (
+                        <input
+                          type="text"
+                          value={tempName}
+                          onChange={(e) => setTempName(e.target.value)}
+                          onBlur={() => {
+                            const final = tempName.trim() || 'Untitled';
+                            setRequestName(final);
+                            setIsEditingName(false);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              const final = tempName.trim() || 'Untitled';
+                              setRequestName(final);
+                              setIsEditingName(false);
+                            } else if (e.key === 'Escape') {
+                              setIsEditingName(false);
+                            }
+                          }}
+                          autoFocus
+                          maxLength={50}
+                          className="bg-slate-950 border border-indigo-500 rounded-lg py-1 px-2.5 text-xs font-bold text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-505 w-64 max-w-sm"
+                        />
+                      ) : (
+                        <div 
+                          onClick={() => {
+                            setTempName(requestName);
+                            setIsEditingName(true);
+                          }}
+                          className="flex items-center gap-2 hover:bg-slate-850 px-2 py-1 rounded-lg transition group cursor-pointer border border-transparent hover:border-slate-800"
+                          title="Click to rename request"
+                        >
+                          <span className="text-xs font-bold text-slate-100 group-hover:text-indigo-400 transition-colors">
+                            {requestName}
+                          </span>
+                          <Edit2 className="w-3 h-3 text-slate-500 group-hover:text-indigo-400 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0" />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2 self-end sm:self-auto">
+                      {/* Save Split Selector Control */}
+                      <div className="relative flex items-stretch">
+                        <button
+                          onClick={() => {
+                            handleDirectSaveActiveRequest();
+                          }}
+                          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-l-lg text-xs font-bold text-emerald-400 bg-emerald-950/35 hover:bg-emerald-950/50 border border-emerald-900/60 transition cursor-pointer shadow-sm hover:text-emerald-300"
+                          title="Save settings"
+                        >
+                          <Save className="w-3.5 h-3.5" /> Save
+                        </button>
+                        
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setIsSaveDropdownOpen(!isSaveDropdownOpen);
+                          }}
+                          className="px-2 py-1.5 rounded-r-lg text-xs font-bold text-emerald-400 bg-emerald-950/35 hover:bg-emerald-950/50 border border-emerald-900/60 border-l-0 transition cursor-pointer shadow-sm flex items-center justify-center hover:text-emerald-300"
+                          title="Save options"
+                        >
+                          <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-205 ${isSaveDropdownOpen ? 'rotate-180' : ''}`} />
+                        </button>
+
+                        {isSaveDropdownOpen && (
+                          <>
+                            <div 
+                              className="fixed inset-0 z-40" 
+                              onClick={() => setIsSaveDropdownOpen(false)} 
+                            />
+                            <div className="absolute right-0 top-full mt-1.5 w-36 bg-slate-900 border border-slate-800 rounded-lg shadow-xl py-1 z-50 animate-fadeIn select-all">
+                              <button
+                                onClick={() => {
+                                  setIsSaveDropdownOpen(false);
+                                  setSaveTargetName(requestName);
+                                  setIsSaveModalOpen(true);
+                                }}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-350 hover:text-white hover:bg-slate-800/80 transition text-left cursor-pointer"
+                              >
+                                <FolderPlus className="w-3.5 h-3.5 text-indigo-400" />
+                                <span>Save As...</span>
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="Bookmark tag..."
-                      value={saveTargetName}
-                      onChange={(e) => setSaveTargetName(e.target.value)}
-                      className="bg-slate-950 border border-slate-800 rounded-lg py-1 px-2 text-xs text-slate-200 focus:outline-none w-36 font-semibold"
-                    />
-                    <select
-                      onChange={(e) => {
-                        const targetId = e.target.value;
-                        if (targetId) {
-                          handleSaveActiveRequestToCollection(targetId);
-                          e.target.value = '';
+
+                  {/* Main Sections Body - Request Composer & Responses directly stacked inside 1 panel */}
+                  <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">
+                    {/* Top Section request constructor */}
+                    <RequestPanel
+                      config={config}
+                      onChangeConfig={setConfig}
+                      onSend={handleSendRequest}
+                      isLoading={isLoading}
+                      isCollapsed={isRequestCollapsed}
+                      onToggleCollapse={() => {
+                        setIsRequestCollapsed(!isRequestCollapsed);
+                        if (isRequestCollapsed && isResponseCollapsed) {
+                          setIsResponseCollapsed(false);
                         }
                       }}
-                      className="bg-indigo-600 hover:bg-indigo-505 text-white font-semibold text-[11px] py-1 px-3.5 rounded-lg cursor-pointer transition select-none"
-                    >
-                      <option value="">Save to folder...</option>
-                      {collections.map(col => (
-                        <option key={col.id} value={col.id}>{col.name}</option>
-                      ))}
-                    </select>
+                      isIntegrated={true}
+                    />
+
+                    {/* Bottom Section responses outcomes */}
+                    <ResponseViewer
+                      response={response}
+                      isLoading={isLoading}
+                      isCollapsed={isResponseCollapsed}
+                      onToggleCollapse={() => {
+                        setIsResponseCollapsed(!isResponseCollapsed);
+                        if (isResponseCollapsed && isRequestCollapsed) {
+                          setIsRequestCollapsed(false);
+                        }
+                      }}
+                      isIntegrated={true}
+                    />
                   </div>
                 </div>
-
-                {/* Top Section request constructor */}
-                <RequestPanel
-                  config={config}
-                  onChangeConfig={setConfig}
-                  onSend={handleSendRequest}
-                  isLoading={isLoading}
-                  isCollapsed={isRequestCollapsed}
-                  onToggleCollapse={() => {
-                    setIsRequestCollapsed(!isRequestCollapsed);
-                    if (isRequestCollapsed && isResponseCollapsed) {
-                      setIsResponseCollapsed(false);
-                    }
-                  }}
-                />
-
-                {/* Bottom Section responses outcomes */}
-                <ResponseViewer
-                  response={response}
-                  isLoading={isLoading}
-                  isCollapsed={isResponseCollapsed}
-                  onToggleCollapse={() => {
-                    setIsResponseCollapsed(!isResponseCollapsed);
-                    if (isResponseCollapsed && isRequestCollapsed) {
-                      setIsRequestCollapsed(false);
-                    }
-                  }}
-                />
               </motion.div>
             ) : (
               <motion.div
@@ -958,6 +1352,100 @@ export default function App() {
         isOpen={isEnvManagerOpen}
         onClose={() => setIsEnvManagerOpen(false)}
       />
+
+      {/* Save Request Popup Dialog */}
+      {isSaveModalOpen && (
+        <div id="save_request_modal" className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 select-none">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-md p-6 shadow-2xl space-y-5 animate-fadeIn">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Save className="w-5 h-5 text-indigo-400" />
+                <h3 className="text-sm font-bold text-slate-100">Save Request To Collection</h3>
+              </div>
+              <button 
+                onClick={() => setIsSaveModalOpen(false)}
+                className="text-slate-400 hover:text-slate-200 transition text-sm font-bold p-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Request Name Input Context */}
+            <div className="space-y-2">
+              <label className="text-[10.5px] text-slate-400 uppercase tracking-wider font-bold block">Request Name</label>
+              <input
+                type="text"
+                value={saveTargetName}
+                onChange={(e) => setSaveTargetName(e.target.value)}
+                placeholder="Give your request a name..."
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg py-2 px-3 text-xs text-slate-250 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-semibold font-mono"
+              />
+            </div>
+
+            {/* Choose Target Collection Folder */}
+            <div className="space-y-2.5">
+              <label className="text-[10.5px] text-slate-400 uppercase tracking-wider font-bold block">Choose Collection Folder</label>
+              
+              {collections.length > 0 ? (
+                <div className="max-h-40 overflow-y-auto border border-slate-850 rounded-xl p-1 bg-slate-950/30 space-y-1">
+                  {collections.map(col => (
+                    <button
+                      key={col.id}
+                      onClick={() => handleSaveActiveRequestToCollection(col.id, saveTargetName)}
+                      className="w-full flex items-center justify-between p-2.5 rounded-lg text-xs font-semibold text-slate-350 hover:text-white hover:bg-slate-850/60 transition text-left cursor-pointer border border-transparent hover:border-slate-800"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Folder className="w-4 h-4 text-indigo-400" />
+                        <span>{col.name}</span>
+                      </div>
+                      <span className="text-[10px] text-slate-500 font-bold bg-slate-900 border border-slate-800 px-2 py-0.5 rounded-full">
+                        {col.requests.length} items
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[11px] text-slate-500 font-medium italic py-2 text-center">No folder collections exist yet. Create one below to save!</p>
+              )}
+            </div>
+
+            {/* Inline creation on-the-fly */}
+            <div className="border-t border-slate-800 pt-4 space-y-2.5">
+              <label className="text-[10.5px] text-slate-400 uppercase tracking-wider font-bold block">Or Save to a New Folder</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="New collection name..."
+                  value={collectionNameInput}
+                  onChange={(e) => setCollectionNameInput(e.target.value)}
+                  className="flex-1 bg-slate-950 border border-slate-810 rounded-lg py-2 px-3 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+                <button
+                  onClick={() => {
+                    if (!collectionNameInput.trim()) return;
+                    handleSaveToNewCollection(collectionNameInput, saveTargetName);
+                    setCollectionNameInput('');
+                  }}
+                  className="bg-indigo-600 hover:bg-indigo-550 text-white px-3 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" /> Save
+                </button>
+              </div>
+            </div>
+
+            {/* Close popups */}
+            <div className="pt-2 flex justify-between gap-3">
+              <button
+                onClick={() => setIsSaveModalOpen(false)}
+                className="w-full bg-slate-800/60 hover:bg-slate-805 text-slate-300 py-2 rounded-lg text-xs font-bold transition cursor-pointer border border-slate-800/80"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Shortcuts Guide Modals */}
       {isShortcutsOpen && (

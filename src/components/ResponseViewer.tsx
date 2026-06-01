@@ -12,13 +12,15 @@ interface ResponseViewerProps {
   isLoading: boolean;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
+  isIntegrated?: boolean;
 }
 
 export default function ResponseViewer({ 
   response, 
   isLoading,
   isCollapsed = false,
-  onToggleCollapse
+  onToggleCollapse,
+  isIntegrated = false
 }: ResponseViewerProps) {
   const [activeTab, setActiveTab] = useState<'body' | 'headers' | 'tests' | 'console'>('body');
   const [bodyFormat, setBodyFormat] = useState<'pretty' | 'raw'>('pretty');
@@ -52,9 +54,10 @@ export default function ResponseViewer({
   return (
     <div 
       id="response_panel_root" 
-      className={`bg-slate-950/65 rounded-xl border border-slate-800 flex flex-col shadow-lg overflow-hidden transition-all duration-150 ${
-        isCollapsed ? 'flex-initial h-fit' : 'flex-1 min-h-[160px]'
-      }`}
+      className={isIntegrated 
+        ? `border-t border-slate-800 flex flex-col overflow-hidden transition-all duration-150 ${isCollapsed ? 'flex-initial h-fit' : 'flex-1 min-h-[160px]'}`
+        : `bg-slate-950/65 rounded-xl border border-slate-800 flex flex-col shadow-lg overflow-hidden transition-all duration-150 ${isCollapsed ? 'flex-initial h-fit' : 'flex-1 min-h-[160px]'}`
+      }
     >
       {/* Response Header Section */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between border-b border-slate-850 px-4 py-3 bg-slate-950/50 gap-3">

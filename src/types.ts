@@ -81,3 +81,13 @@ export interface SavedCollection {
     config: RequestConfig;
   }[];
 }
+
+export interface Tab {
+  id: string;
+  name: string;
+  config: RequestConfig;
+  response: ResponseData | null;
+  isLoading: boolean;
+  isChanged: boolean;
+  associatedRequestId?: string; // Optional reference if it comes from a saved collection or history item
+}
