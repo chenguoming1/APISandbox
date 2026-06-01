@@ -1,0 +1,6 @@
+{
+  "name": "API Client & Request Tester",
+  "description": "An interactive environment for making API calls, managing environment variables, running automated test scripts, and comparing request responses.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
