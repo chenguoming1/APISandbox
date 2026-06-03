@@ -6,6 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { HttpMethod, RequestConfig, KeyValuePair, BodyType, AuthType, AuthSettings } from '../types';
 import { SCRIPT_TEMPLATES } from '../utils/scriptRunner';
+import { isCurlCommand, parseCurl } from '../utils/curlParser';
 import { Plus, Trash2, Code2, Shield, Settings2, FileCode, Beaker, HelpCircle, ChevronDown, ChevronUp, Sliders } from 'lucide-react';
 
 interface RequestPanelProps {
@@ -234,7 +235,15 @@ export default function RequestPanel({
             type="text"
             placeholder="Enter target endpoint URL (e.g. {{baseUrl}}/get or https://httpbin.org/json)..."
             value={config.url}
-            onChange={(e) => onChangeConfig({ ...config, url: e.target.value })}
+            onChange={(e) => {
+              const val = e.target.value;
+              if (isCurlCommand(val)) {
+                const parsed = parseCurl(val, config);
+                onChangeConfig(parsed);
+              } else {
+                onChangeConfig({ ...config, url: val });
+              }
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 onSend();
