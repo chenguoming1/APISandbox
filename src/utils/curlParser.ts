@@ -29,8 +29,10 @@ export function parseCurl(curlCommand: string, defaultConfig: RequestConfig): Re
   
   let method: HttpMethod | undefined = undefined;
   let url = '';
+  let isGetFlag = false;
   const headerPairs: { key: string; value: string }[] = [];
   const bodyParts: string[] = [];
+  const dataItems: { key: string; value: string }[] = [];
   
   const argsWithParams = new Set([
     '-X', '--request',
@@ -57,6 +59,8 @@ export function parseCurl(curlCommand: string, defaultConfig: RequestConfig): Re
         const cleanVal = nextVal.replace(/^['"]|['"]$/g, '').toUpperCase();
         method = cleanVal as HttpMethod;
       }
+    } else if (token === '-G' || token === '--get') {
+      isGetFlag = true;
     } else if (token === '-H' || token === '--header') {
       const nextVal = tokens[++i];
       if (nextVal) {
@@ -78,6 +82,22 @@ export function parseCurl(curlCommand: string, defaultConfig: RequestConfig): Re
       const nextVal = tokens[++i];
       if (nextVal !== undefined) {
         bodyParts.push(nextVal);
+        
+        // Parse key-value structure of data flag
+        const eqIdx = nextVal.indexOf('=');
+        if (eqIdx !== -1) {
+          const key = nextVal.substring(0, eqIdx);
+          const val = nextVal.substring(eqIdx + 1);
+          dataItems.push({
+            key: key.replace(/^['"]|['"]$/g, ''),
+            value: val.replace(/^['"]|['"]$/g, '')
+          });
+        } else {
+          dataItems.push({
+            key: nextVal.replace(/^['"]|['"]$/g, ''),
+            value: ''
+          });
+        }
       }
     } else if (token === '-u' || token === '--user') {
       const nextVal = tokens[++i];
@@ -97,6 +117,21 @@ export function parseCurl(curlCommand: string, defaultConfig: RequestConfig): Re
           };
         }
       }
+    } else if (token === '-b' || token === '--cookie') {
+      const nextVal = tokens[++i];
+      if (nextVal) {
+        headerPairs.push({ key: 'Cookie', value: nextVal });
+      }
+    } else if (token === '-A' || token === '--user-agent') {
+      const nextVal = tokens[++i];
+      if (nextVal) {
+        headerPairs.push({ key: 'User-Agent', value: nextVal });
+      }
+    } else if (token === '-e' || token === '--referer') {
+      const nextVal = tokens[++i];
+      if (nextVal) {
+        headerPairs.push({ key: 'Referer', value: nextVal });
+      }
     } else if (token.startsWith('-')) {
       // It's some other flag. If it takes an argument, skip the next item
       if (argsWithParams.has(token)) {
@@ -113,10 +148,19 @@ export function parseCurl(curlCommand: string, defaultConfig: RequestConfig): Re
   // Set method
   if (method) {
     config.method = method;
+  } else if (isGetFlag) {
+    config.method = 'GET';
   } else {
     // If no method was specified but we have data, default to POST, else GET.
     config.method = bodyParts.length > 0 ? 'POST' : 'GET';
   }
+
+  // If -G is specified, curl forces standard GET behavior
+  if (isGetFlag) {
+    config.method = 'GET';
+  }
+
+  const isGetLike = config.method === 'GET' || config.method === 'HEAD' || config.method === 'OPTIONS';
 
   // Set URL
   if (url) {
@@ -143,27 +187,80 @@ export function parseCurl(curlCommand: string, defaultConfig: RequestConfig): Re
     }
   }
 
-  // Set body
-  if (bodyParts.length > 0) {
-    config.body = bodyParts.join('&');
-    // Try to auto-detect if JSON or text
-    let isJson = false;
-    try {
-      const trimmedBody = config.body.trim();
-      if (
-        (trimmedBody.startsWith('{') && trimmedBody.endsWith('}')) ||
-        (trimmedBody.startsWith('[') && trimmedBody.endsWith(']'))
-      ) {
-        JSON.parse(trimmedBody);
-        isJson = true;
+  // Set body OR query parameters based on method and flags
+  if (isGetLike || isGetFlag) {
+    // Treat parsed data items as query parameters
+    dataItems.forEach(({ key, value }) => {
+      // Safe decode URL encode values if they are encoded
+      let decodedKey = key;
+      let decodedValue = value;
+      try {
+        decodedKey = decodeURIComponent(key);
+        decodedValue = decodeURIComponent(value);
+      } catch {
+        // Fallback to raw if not decodeable
       }
-    } catch {
-      // Ignore parsing error, default to standard text
-    }
+      
+      config.queryParams.push({
+        id: Math.random().toString(36).substr(2, 9),
+        key: decodedKey,
+        value: decodedValue,
+        enabled: true
+      });
+    });
 
-    config.bodyType = isJson ? 'json' : 'text';
-  } else {
     config.bodyType = 'none';
+    config.body = '';
+    
+    // Also append query parameters to the URL if they are not already there
+    if (dataItems.length > 0 && config.url) {
+      try {
+        const urlObj = new URL(config.url.startsWith('http') ? config.url : `http://dummy.com/${config.url}`);
+        dataItems.forEach(({ key, value }) => {
+          try {
+            urlObj.searchParams.append(decodeURIComponent(key), decodeURIComponent(value));
+          } catch {
+            urlObj.searchParams.append(key, value);
+          }
+        });
+        const finalRelativeUrl = urlObj.pathname + urlObj.search;
+        if (config.url.startsWith('http')) {
+          config.url = urlObj.toString();
+        } else {
+          // If relative, reconstruct properly without the dummy host
+          const hasLeadingSlash = config.url.startsWith('/');
+          config.url = (hasLeadingSlash ? '' : '') + finalRelativeUrl.substring(1);
+        }
+      } catch {
+        // Fallback to string concatenation if URL parser fails
+        const joinChar = config.url.includes('?') ? '&' : '?';
+        const queryStr = dataItems.map(item => `${item.key}=${item.value}`).join('&');
+        config.url = `${config.url}${joinChar}${queryStr}`;
+      }
+    }
+  } else {
+    // For non-GET requests (like POST), set them as body parts
+    if (bodyParts.length > 0) {
+      config.body = bodyParts.join('&');
+      // Try to auto-detect if JSON or text
+      let isJson = false;
+      try {
+        const trimmedBody = config.body.trim();
+        if (
+          (trimmedBody.startsWith('{') && trimmedBody.endsWith('}')) ||
+          (trimmedBody.startsWith('[') && trimmedBody.endsWith(']'))
+        ) {
+          JSON.parse(trimmedBody);
+          isJson = true;
+        }
+      } catch {
+        // Ignore parsing error, default to standard text
+      }
+
+      config.bodyType = isJson ? 'json' : 'text';
+    } else {
+      config.bodyType = 'none';
+    }
   }
 
   // Set headers
@@ -220,16 +317,21 @@ export function parseCurl(curlCommand: string, defaultConfig: RequestConfig): Re
 }
 
 export function tokenizeArgv(curlStr: string): string[] {
-  // Normalize line endings and join backslash split lines
-  const normalized = curlStr.replace(/\\\r?\n/g, ' ').replace(/\\\n/g, ' ');
+  // Normalize line endings and backslashes that get joined when pasting multi-line commands.
+  // Replace backslash followed by any number of spaces, tabs, or newlines with a single space.
+  const cleaned = curlStr
+    .replace(/\\[ \t\r\n]+/g, ' ')
+    .replace(/\\ /g, ' ')
+    .trim();
+
   const args: string[] = [];
   let current = '';
   let inDoubleQuotes = false;
   let inSingleQuotes = false;
   let escaped = false;
 
-  for (let i = 0; i < normalized.length; i++) {
-    const char = normalized[i];
+  for (let i = 0; i < cleaned.length; i++) {
+    const char = cleaned[i];
 
     if (escaped) {
       current += char;
